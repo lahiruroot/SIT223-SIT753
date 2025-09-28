@@ -37,6 +37,8 @@ services:
       - PORT=3000
       - CORS_ORIGIN=*
       - MONGODB_URI=mongodb://admin:password@mongodb:27017/nodejs-cicd?authSource=admin
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - JWT_EXPIRE=7d
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -76,26 +78,6 @@ services:
       - "traefik.http.routers.prometheus.rule=Host(`localhost`) && PathPrefix(`/prometheus`)"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
 
-  # Grafana for visualization (optional)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-    networks:
-      - app-network
-    depends_on:
-      - prometheus
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`localhost`) && PathPrefix(`/grafana`)"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
   # Nginx reverse proxy (optional)
   nginx:
@@ -167,8 +149,6 @@ volumes:
   mongodb_data:
     driver: local
   prometheus_data:
-    driver: local
-  grafana_data:
     driver: local
   redis_data:
     driver: local
