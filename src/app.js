@@ -2,7 +2,9 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const client = require('prom-client');
+const jwt = require('jsonwebtoken');
 const User = require('./models/User');
+const { auth, adminAuth } = require('./middleware/auth');
 
 // Create a Registry to register the metrics
 const register = new client.Registry();
@@ -135,8 +137,253 @@ const handleValidationErrors = (req, res, next) => {
 
 // Routes
 
-// GET /api/users - Get all users with pagination and search
-router.get('/users', async (req, res) => {
+// ==================== AUTHENTICATION ROUTES ====================
+
+// POST /api/auth/register - User registration
+router.post('/auth/register', validateUser, handleValidationErrors, async (req, res) => {
+  try {
+    // Check if email already exists
+    const existingUser = await User.findOne({ email: req.body.email });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: 'Email already exists'
+      });
+    }
+    
+    const user = new User(req.body);
+    await user.save();
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    );
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        user: user.toJSON(),
+        token
+      },
+      message: 'User registered successfully'
+    });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register user',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/auth/login - User login
+router.post('/auth/login', [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+], handleValidationErrors, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Find user by email
+    const user = await User.findOne({ email }).select('+password');
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+    
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        error: 'Account is deactivated'
+      });
+    }
+    
+    // Verify password
+    const isPasswordValid = await user.comparePassword(password);
+    
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+    
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        user: user.toJSON(),
+        token
+      },
+      message: 'Login successful'
+    });
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/auth/logout - User logout (client-side token removal)
+router.post('/auth/logout', auth, async (req, res) => {
+  try {
+    // In a stateless JWT system, logout is handled client-side
+    // You could implement token blacklisting here if needed
+    
+    res.json({
+      success: true,
+      message: 'Logout successful'
+    });
+  } catch (error) {
+    console.error('Error during logout:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Logout failed',
+      message: error.message
+    });
+  }
+});
+
+// GET /api/auth/me - Get current user profile
+router.get('/auth/me', auth, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: req.user
+    });
+  } catch (error) {
+    console.error('Error getting user profile:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user profile',
+      message: error.message
+    });
+  }
+});
+
+// PUT /api/auth/me - Update current user profile
+router.put('/auth/me', auth, [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters'),
+  body('email')
+    .optional()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email')
+], handleValidationErrors, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    
+    // Check if email already exists (excluding current user)
+    if (email && email !== req.user.email) {
+      const existingUser = await User.findOne({ 
+        email, 
+        _id: { $ne: req.user._id } 
+      });
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'Email already exists'
+        });
+      }
+    }
+    
+    // Update user
+    if (name) req.user.name = name;
+    if (email) req.user.email = email;
+    
+    await req.user.save();
+    
+    res.json({
+      success: true,
+      data: req.user.toJSON(),
+      message: 'Profile updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update profile',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/auth/change-password - Change password
+router.post('/auth/change-password', auth, [
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Current password is required'),
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('New password must be at least 6 characters long')
+], handleValidationErrors, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    
+    // Get user with password
+    const user = await User.findById(req.user._id).select('+password');
+    
+    // Verify current password
+    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+    
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect'
+      });
+    }
+    
+    // Update password
+    user.password = newPassword;
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to change password',
+      message: error.message
+    });
+  }
+});
+
+// ==================== USER MANAGEMENT ROUTES ====================
+
+// GET /api/users - Get all users with pagination and search (admin only)
+router.get('/users', adminAuth, async (req, res) => {
   try {
     const { page = 1, limit = 10, search, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     
@@ -189,8 +436,8 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// GET /api/users/:id - Get user by ID
-router.get('/users/:id', async (req, res) => {
+// GET /api/users/:id - Get user by ID (admin only)
+router.get('/users/:id', adminAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     
@@ -215,8 +462,8 @@ router.get('/users/:id', async (req, res) => {
   }
 });
 
-// POST /api/users - Create new user
-router.post('/users', validateUser, handleValidationErrors, async (req, res) => {
+// POST /api/users - Create new user (admin only)
+router.post('/users', adminAuth, validateUser, handleValidationErrors, async (req, res) => {
   try {
     // Check if email already exists
     const existingUser = await User.findOne({ email: req.body.email });
@@ -245,8 +492,8 @@ router.post('/users', validateUser, handleValidationErrors, async (req, res) => 
   }
 });
 
-// PUT /api/users/:id - Update user
-router.put('/users/:id', validateUserUpdate, handleValidationErrors, async (req, res) => {
+// PUT /api/users/:id - Update user (admin only)
+router.put('/users/:id', adminAuth, validateUserUpdate, handleValidationErrors, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     
@@ -295,8 +542,8 @@ router.put('/users/:id', validateUserUpdate, handleValidationErrors, async (req,
   }
 });
 
-// DELETE /api/users/:id - Delete user
-router.delete('/users/:id', async (req, res) => {
+// DELETE /api/users/:id - Delete user (admin only)
+router.delete('/users/:id', adminAuth, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     

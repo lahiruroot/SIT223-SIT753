@@ -74,4 +74,9 @@ userSchema.methods.toJSON = function() {
   return userObject;
 };
 
+// Method to include password in query results when needed
+userSchema.methods.toJSONWithPassword = function() {
+  return this.toObject();
+};
+
 module.exports = mongoose.model('User', userSchema);
