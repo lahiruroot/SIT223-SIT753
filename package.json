@@ -1,0 +1,35 @@
+{
+  "name": "devops-pipeline-jenkins",
+  "version": "1.0.0",
+  "description": "High Distinction Task: DevOps Pipeline with Jenkins",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "build": "echo 'Build completed successfully'",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "devops",
+    "jenkins",
+    "ci-cd",
+    "nodejs"
+  ],
+  "author": "DevOps Student",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.55.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
