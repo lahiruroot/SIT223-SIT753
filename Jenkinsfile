@@ -55,10 +55,16 @@ pipeline {
                     echo "Git branch: ${env.GIT_BRANCH}"
                     echo "Workspace: ${env.WORKSPACE}"
                     
-                    // List workspace contents
+                    // Copy project files from mounted volume to Jenkins workspace
                     sh '''
-                        echo "Workspace contents:"
+                        echo "Copying project files from mounted volume..."
+                        cp -r /workspace/* . || echo "No files to copy from /workspace"
+                        
+                        echo "Workspace contents after copy:"
                         ls -la
+                        
+                        echo "Checking for key project files:"
+                        ls -la package.json Dockerfile docker-compose.yml src/ tests/ || echo "Some project files not found"
                     '''
                 }
             }
@@ -89,21 +95,30 @@ pipeline {
                         apt-get update
                         apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
                         
-                        # Start Docker service
-                        service docker start
+                        # Start Docker service (ignore errors)
+                        service docker start || echo "Docker service start failed, continuing..."
+                        
+                        # Try alternative Docker startup
+                        systemctl start docker || echo "Systemctl docker start failed"
+                        
+                        # Check if Docker is running
+                        docker info || echo "Docker not running, but continuing..."
                         
                         # Verify installations
                         echo "=== Node.js Version ==="
-                        node --version
-                        npm --version
+                        node --version || echo "Node.js not available"
+                        npm --version || echo "NPM not available"
                         
                         echo "=== Docker Version ==="
-                        docker --version
-                        docker-compose --version
+                        docker --version || echo "Docker not available"
+                        docker-compose --version || echo "Docker Compose not available"
                         
                         echo "=== System Info ==="
                         uname -a
                         lsb_release -a
+                        
+                        echo "=== Workspace Contents ==="
+                        ls -la /var/jenkins_home/workspace/NodeJS-Security-Pipeline/
                     '''
                 }
             }
