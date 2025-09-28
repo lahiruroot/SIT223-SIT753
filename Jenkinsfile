@@ -45,22 +45,21 @@ pipeline {
         stage('Checkout') {
             steps {
                 script {
-                    echo "Checking out code from ${env.BRANCH_NAME}"
-                    checkout scm
+                    echo "Setting up workspace for local project"
                     
-                    // Get git information
-                    env.GIT_COMMIT_SHORT = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
-                    
-                    env.GIT_BRANCH = sh(
-                        script: 'git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim()
+                    // Set default values for git information
+                    env.GIT_COMMIT_SHORT = "local-build"
+                    env.GIT_BRANCH = "local"
                     
                     echo "Git commit: ${env.GIT_COMMIT_SHORT}"
                     echo "Git branch: ${env.GIT_BRANCH}"
+                    echo "Workspace: ${env.WORKSPACE}"
+                    
+                    // List workspace contents
+                    sh '''
+                        echo "Workspace contents:"
+                        ls -la
+                    '''
                 }
             }
         }
@@ -667,56 +666,18 @@ EOF
         success {
             script {
                 echo "Pipeline executed successfully!"
-                
-                // Send success notification
-                mail (
-                    subject: "✅ Build Success: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-                    body: """
-                    Build Status: SUCCESS
-                    Project: ${env.JOB_NAME}
-                    Build Number: ${env.BUILD_NUMBER}
-                    Branch: ${env.GIT_BRANCH}
-                    Commit: ${env.GIT_COMMIT_SHORT}
-                    Build URL: ${env.BUILD_URL}
-                    
-                    Security Analysis: COMPLETED
-                    - OWASP Dependency Check: PASSED
-                    - Snyk Analysis: COMPLETED
-                    - NPM Audit: PASSED
-                    - Docker Security Scan: COMPLETED
-                    
-                    The application has been successfully built and deployed to staging.
-                    All security scans completed successfully.
-                    """,
-                    to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
-                )
+                echo "✅ Build Success: ${env.JOB_NAME} - ${env.BUILD_NUMBER}"
+                echo "Security Analysis: COMPLETED"
+                echo "All security scans completed successfully."
             }
         }
         
         failure {
             script {
                 echo "Pipeline failed!"
-                
-                // Send failure notification
-                mail (
-                    subject: "❌ Build Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-                    body: """
-                    Build Status: FAILED
-                    Project: ${env.JOB_NAME}
-                    Build Number: ${env.BUILD_NUMBER}
-                    Branch: ${env.GIT_BRANCH}
-                    Commit: ${env.GIT_COMMIT_SHORT}
-                    Build URL: ${env.BUILD_URL}
-                    
-                    Security Analysis: FAILED
-                    - Check security reports for details
-                    - Review HIGH/CRITICAL vulnerabilities
-                    - Update dependencies if needed
-                    
-                    Please check the build logs and security reports for more details.
-                    """,
-                    to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
-                )
+                echo "❌ Build Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}"
+                echo "Security Analysis: FAILED"
+                echo "Please check the build logs and security reports for more details."
             }
         }
         
