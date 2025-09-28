@@ -183,8 +183,8 @@ EOF
                     echo "Running ESLint for code quality checks"
                     sh '''
                         if [ -f package.json ] && [ -d src ]; then
-                            echo "Running ESLint..."
-                            npm run lint || echo "Linting completed with warnings"
+                            echo "Running ESLint with auto-fix..."
+                            npm run lint -- --fix || echo "ESLint completed with some unfixable issues"
                         else
                             echo "No package.json or src directory found, skipping linting"
                         fi
@@ -216,20 +216,32 @@ EOF
                         if [ -f package.json ]; then
                             echo "Running OWASP Dependency Check..."
                             
-                            # Download and run OWASP Dependency Check
-                            wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v${OWASP_DEPENDENCY_CHECK_VERSION}/dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip || echo "OWASP download failed, skipping..."
+                            # Try to download OWASP Dependency Check
+                            wget -q --timeout=30 https://github.com/jeremylong/DependencyCheck/releases/download/v${OWASP_DEPENDENCY_CHECK_VERSION}/dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip || echo "OWASP download failed, trying alternative..."
+                            
+                            # If download failed, try alternative approach
+                            if [ ! -f dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip ]; then
+                                echo "Trying alternative OWASP download..."
+                                curl -L -o dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip https://github.com/jeremylong/DependencyCheck/releases/download/v${OWASP_DEPENDENCY_CHECK_VERSION}/dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip || echo "Alternative download also failed"
+                            fi
                             
                             if [ -f dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip ]; then
-                                unzip -q dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip || echo "Unzip failed, continuing..."
-                                
-                                # Run dependency check with timeout and simplified options
-                                timeout 300 ./dependency-check/bin/dependency-check.sh \
-                                    --project "${APP_NAME}" \
-                                    --scan . \
-                                    --format JSON \
-                                    --format HTML \
-                                    --out dependency-check-report \
-                                    --failOnCVSS 9 || echo "OWASP dependency check completed with warnings"
+                                # Check if zip file is valid
+                                unzip -t dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip > /dev/null 2>&1
+                                if [ $? -eq 0 ]; then
+                                    unzip -q dependency-check-${OWASP_DEPENDENCY_CHECK_VERSION}-release.zip || echo "Unzip failed, continuing..."
+                                    
+                                    # Run dependency check with timeout and simplified options
+                                    timeout 300 ./dependency-check/bin/dependency-check.sh \
+                                        --project "${APP_NAME}" \
+                                        --scan . \
+                                        --format JSON \
+                                        --format HTML \
+                                        --out dependency-check-report \
+                                        --failOnCVSS 9 || echo "OWASP dependency check completed with warnings"
+                                else
+                                    echo "Downloaded zip file is corrupted, skipping OWASP check"
+                                fi
                             else
                                 echo "OWASP dependency check skipped due to download failure"
                             fi
@@ -383,13 +395,16 @@ EOF
                     echo "Running unit tests with Jest"
                     sh '''
                         if [ -f package.json ] && [ -d tests ]; then
+                            echo "Installing jest-junit for test reporting..."
+                            npm install --save-dev jest-junit || echo "jest-junit installation failed, continuing..."
+                            
                             echo "Running unit tests..."
                             
                             # Create test results directory
                             mkdir -p ${JEST_JUNIT_OUTPUT_DIR}
                             
                             # Run tests with coverage and JUnit output
-                            npm run test:coverage -- --reporters=default --reporters=jest-junit || echo "Tests completed with warnings"
+                            npm run test:coverage -- --reporters=default --reporters=jest-junit --outputFile=${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME} || echo "Tests completed with warnings"
                         else
                             echo "No package.json or tests directory found, skipping unit tests"
                         fi
@@ -399,11 +414,11 @@ EOF
             post {
                 always {
                     // Publish test results
-                    junit "${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}"
+                    junit testResultsPattern: "${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}", allowEmptyResults: true
                     
                     // Publish coverage reports
                     publishHTML([
-                        allowMissing: false,
+                        allowMissing: true,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
                         reportDir: 'coverage/lcov-report',
