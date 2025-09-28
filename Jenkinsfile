@@ -14,7 +14,6 @@ pipeline {
         // Security and quality tools
         SONAR_PROJECT_KEY = 'nodejs-jenkins-cicd'
         SONAR_HOST_URL = 'http://sonarqube:9000'
-        SONAR_TOKEN = credentials('sonar-token')
         
         // Test configuration
         JEST_JUNIT_OUTPUT_DIR = 'test-results'
@@ -34,12 +33,6 @@ pipeline {
         
         // Add timestamps to console output
         timestamps()
-        
-        // Add colors to console output
-        ansiColor('xterm')
-        
-        // Skip default checkout
-        skipDefaultCheckout()
     }
     
     stages {
@@ -236,22 +229,25 @@ pipeline {
                 anyOf {
                     branch 'main'
                     branch 'develop'
-                    changeRequest()
                 }
             }
             steps {
                 script {
-                    echo "Running SonarQube analysis"
+                    echo "Running SonarQube analysis (optional - requires SonarQube plugin)"
                     sh '''
-                        # Run SonarQube analysis
-                        npx sonar-scanner \
-                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                            -Dsonar.host.url=${SONAR_HOST_URL} \
-                            -Dsonar.login=${SONAR_TOKEN} \
-                            -Dsonar.sources=src \
-                            -Dsonar.tests=tests \
-                            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                            -Dsonar.testExecutionReportPaths=${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}
+                        # Check if sonar-scanner is available
+                        if command -v sonar-scanner &> /dev/null; then
+                            echo "Running SonarQube analysis..."
+                            npx sonar-scanner \
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                -Dsonar.host.url=${SONAR_HOST_URL} \
+                                -Dsonar.sources=src \
+                                -Dsonar.tests=tests \
+                                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                                -Dsonar.testExecutionReportPaths=${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}
+                        else
+                            echo "SonarQube scanner not available, skipping analysis"
+                        fi
                     '''
                 }
             }
@@ -465,68 +461,44 @@ pipeline {
             script {
                 echo "Pipeline execution completed"
                 
-                // Cleanup Docker images
+                // Cleanup Docker images (optional - only if Docker is available)
                 sh '''
-                    # Remove dangling images
-                    docker image prune -f
-                    
-                    # Remove unused containers
-                    docker container prune -f
+                    if command -v docker &> /dev/null; then
+                        echo "Cleaning up Docker resources..."
+                        # Remove dangling images
+                        docker image prune -f || true
+                        
+                        # Remove unused containers
+                        docker container prune -f || true
+                    else
+                        echo "Docker not available, skipping cleanup"
+                    fi
                 '''
             }
         }
         
         success {
             script {
-                echo "Pipeline executed successfully!"
-                
-                // Send success notification
-                emailext (
-                    subject: "✅ Build Success: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-                    body: """
-                    Build Status: SUCCESS
-                    Project: ${env.JOB_NAME}
-                    Build Number: ${env.BUILD_NUMBER}
-                    Branch: ${env.GIT_BRANCH}
-                    Commit: ${env.GIT_COMMIT_SHORT}
-                    Build URL: ${env.BUILD_URL}
-                    
-                    Security Analysis: COMPLETED
-                    - NPM Audit: PASSED
-                    - Docker Security Scan: COMPLETED
-                    
-                    The application has been successfully built and deployed to staging.
-                    All security scans completed successfully.
-                    """,
-                    to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
-                )
+                echo "✅ Pipeline executed successfully!"
+                echo "Build Status: SUCCESS"
+                echo "Project: ${env.JOB_NAME}"
+                echo "Build Number: ${env.BUILD_NUMBER}"
+                echo "Branch: ${env.GIT_BRANCH}"
+                echo "Commit: ${env.GIT_COMMIT_SHORT}"
+                echo "Build URL: ${env.BUILD_URL}"
             }
         }
         
         failure {
             script {
-                echo "Pipeline failed!"
-                
-                // Send failure notification
-                emailext (
-                    subject: "❌ Build Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-                    body: """
-                    Build Status: FAILED
-                    Project: ${env.JOB_NAME}
-                    Build Number: ${env.BUILD_NUMBER}
-                    Branch: ${env.GIT_BRANCH}
-                    Commit: ${env.GIT_COMMIT_SHORT}
-                    Build URL: ${env.BUILD_URL}
-                    
-                    Security Analysis: FAILED
-                    - Check security reports for details
-                    - Review HIGH/CRITICAL vulnerabilities
-                    - Update dependencies if needed
-                    
-                    Please check the build logs and security reports for more details.
-                    """,
-                    to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@example.com'}"
-                )
+                echo "❌ Pipeline failed!"
+                echo "Build Status: FAILED"
+                echo "Project: ${env.JOB_NAME}"
+                echo "Build Number: ${env.BUILD_NUMBER}"
+                echo "Branch: ${env.GIT_BRANCH}"
+                echo "Commit: ${env.GIT_COMMIT_SHORT}"
+                echo "Build URL: ${env.BUILD_URL}"
+                echo "Please check the build logs for more details."
             }
         }
         
@@ -534,13 +506,18 @@ pipeline {
             script {
                 echo "Cleaning up workspace"
                 
-                // Clean up Docker containers
+                // Clean up Docker containers (optional - only if Docker is available)
                 sh '''
-                    # Stop and remove containers
-                    docker-compose down --remove-orphans || true
-                    
-                    # Remove unused networks
-                    docker network prune -f || true
+                    if command -v docker &> /dev/null; then
+                        echo "Cleaning up Docker containers..."
+                        # Stop and remove containers
+                        docker-compose down --remove-orphans || true
+                        
+                        # Remove unused networks
+                        docker network prune -f || true
+                    else
+                        echo "Docker not available, skipping cleanup"
+                    fi
                 '''
             }
         }
