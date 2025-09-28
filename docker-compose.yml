@@ -1,6 +1,29 @@
 version: '3.8'
 
 services:
+  # MongoDB database
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=nodejs-cicd
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Main application service
   app:
     build:
@@ -15,6 +38,7 @@ services:
       - NODE_ENV=staging
       - PORT=3000
       - CORS_ORIGIN=*
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/nodejs-cicd?authSource=admin
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -142,6 +166,8 @@ services:
         hard: 65536
 
 volumes:
+  mongodb_data:
+    driver: local
   prometheus_data:
     driver: local
   grafana_data:

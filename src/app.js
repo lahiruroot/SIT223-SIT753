@@ -1,5 +1,8 @@
 const express = require('express');
+const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const client = require('prom-client');
+const User = require('./models/User');
 
 // Create a Registry to register the metrics
 const register = new client.Registry();
@@ -31,12 +34,29 @@ const activeConnections = new client.Gauge({
   help: 'Number of active connections'
 });
 
+const databaseConnections = new client.Gauge({
+  name: 'database_connections_active',
+  help: 'Number of active database connections'
+});
+
 // Register the custom metrics
 register.registerMetric(httpRequestDuration);
 register.registerMetric(httpRequestTotal);
 register.registerMetric(activeConnections);
+register.registerMetric(databaseConnections);
 
 const router = express.Router();
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+router.use(limiter);
 
 // Middleware to track metrics
 router.use((req, res, next) => {
@@ -65,59 +85,102 @@ router.use((req, res, next) => {
   next();
 });
 
-// Sample data store (in production, this would be a database)
-let users = [
-  { id: 1, name: 'John Doe', email: 'john@example.com', createdAt: new Date() },
-  { id: 2, name: 'Jane Smith', email: 'jane@example.com', createdAt: new Date() }
+// Validation middleware
+const validateUser = [
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters'),
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email'),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long')
 ];
 
-let nextId = 3;
+const validateUserUpdate = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters'),
+  body('email')
+    .optional()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please provide a valid email'),
+  body('password')
+    .optional()
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long')
+];
 
-// Utility functions
-const findUserById = (id) => users.find(user => user.id === parseInt(id));
-const validateUser = (user) => {
-  const errors = [];
-  if (!user.name || user.name.trim().length === 0) {
-    errors.push('Name is required');
+// Helper function to handle validation errors
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors.array().map(err => ({
+        field: err.path,
+        message: err.msg
+      }))
+    });
   }
-  if (!user.email || !/\S+@\S+\.\S+/.test(user.email)) {
-    errors.push('Valid email is required');
-  }
-  return errors;
+  next();
 };
 
 // Routes
 
-// GET /api/users - Get all users
-router.get('/users', (req, res) => {
+// GET /api/users - Get all users with pagination and search
+router.get('/users', async (req, res) => {
   try {
-    const { page = 1, limit = 10, search } = req.query;
-    let filteredUsers = users;
+    const { page = 1, limit = 10, search, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     
-    // Search functionality
+    // Build query
+    let query = {};
     if (search) {
-      filteredUsers = users.filter(user => 
-        user.name.toLowerCase().includes(search.toLowerCase()) ||
-        user.email.toLowerCase().includes(search.toLowerCase())
-      );
+      query = {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      };
     }
     
-    // Pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Execute query with pagination
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select('-password')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      User.countDocuments(query)
+    ]);
     
     res.json({
       success: true,
-      data: paginatedUsers,
+      data: users,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: filteredUsers.length,
-        pages: Math.ceil(filteredUsers.length / limit)
+        total,
+        pages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
+    console.error('Error fetching users:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch users',
@@ -127,9 +190,9 @@ router.get('/users', (req, res) => {
 });
 
 // GET /api/users/:id - Get user by ID
-router.get('/users/:id', (req, res) => {
+router.get('/users/:id', async (req, res) => {
   try {
-    const user = findUserById(req.params.id);
+    const user = await User.findById(req.params.id).select('-password');
     
     if (!user) {
       return res.status(404).json({
@@ -143,6 +206,7 @@ router.get('/users/:id', (req, res) => {
       data: user
     });
   } catch (error) {
+    console.error('Error fetching user:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch user',
@@ -152,20 +216,10 @@ router.get('/users/:id', (req, res) => {
 });
 
 // POST /api/users - Create new user
-router.post('/users', (req, res) => {
+router.post('/users', validateUser, handleValidationErrors, async (req, res) => {
   try {
-    const errors = validateUser(req.body);
-    
-    if (errors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation failed',
-        details: errors
-      });
-    }
-    
     // Check if email already exists
-    const existingUser = users.find(user => user.email === req.body.email);
+    const existingUser = await User.findOne({ email: req.body.email });
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -173,21 +227,16 @@ router.post('/users', (req, res) => {
       });
     }
     
-    const newUser = {
-      id: nextId++,
-      name: req.body.name.trim(),
-      email: req.body.email.trim(),
-      createdAt: new Date()
-    };
-    
-    users.push(newUser);
+    const user = new User(req.body);
+    await user.save();
     
     res.status(201).json({
       success: true,
-      data: newUser,
+      data: user.toJSON(),
       message: 'User created successfully'
     });
   } catch (error) {
+    console.error('Error creating user:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to create user',
@@ -197,9 +246,9 @@ router.post('/users', (req, res) => {
 });
 
 // PUT /api/users/:id - Update user
-router.put('/users/:id', (req, res) => {
+router.put('/users/:id', validateUserUpdate, handleValidationErrors, async (req, res) => {
   try {
-    const user = findUserById(req.params.id);
+    const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({
@@ -208,36 +257,36 @@ router.put('/users/:id', (req, res) => {
       });
     }
     
-    const errors = validateUser(req.body);
-    
-    if (errors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation failed',
-        details: errors
-      });
-    }
-    
     // Check if email already exists (excluding current user)
-    const existingUser = users.find(u => u.email === req.body.email && u.id !== parseInt(req.params.id));
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        error: 'Email already exists'
+    if (req.body.email && req.body.email !== user.email) {
+      const existingUser = await User.findOne({ 
+        email: req.body.email, 
+        _id: { $ne: req.params.id } 
       });
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'Email already exists'
+        });
+      }
     }
     
     // Update user
-    user.name = req.body.name.trim();
-    user.email = req.body.email.trim();
-    user.updatedAt = new Date();
+    Object.keys(req.body).forEach(key => {
+      if (req.body[key] !== undefined) {
+        user[key] = req.body[key];
+      }
+    });
+    
+    await user.save();
     
     res.json({
       success: true,
-      data: user,
+      data: user.toJSON(),
       message: 'User updated successfully'
     });
   } catch (error) {
+    console.error('Error updating user:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update user',
@@ -247,25 +296,24 @@ router.put('/users/:id', (req, res) => {
 });
 
 // DELETE /api/users/:id - Delete user
-router.delete('/users/:id', (req, res) => {
+router.delete('/users/:id', async (req, res) => {
   try {
-    const userIndex = users.findIndex(user => user.id === parseInt(req.params.id));
+    const user = await User.findByIdAndDelete(req.params.id);
     
-    if (userIndex === -1) {
+    if (!user) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
     
-    const deletedUser = users.splice(userIndex, 1)[0];
-    
     res.json({
       success: true,
-      data: deletedUser,
+      data: user.toJSON(),
       message: 'User deleted successfully'
     });
   } catch (error) {
+    console.error('Error deleting user:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete user',
@@ -275,10 +323,11 @@ router.delete('/users/:id', (req, res) => {
 });
 
 // GET /api/stats - Get application statistics
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
     const stats = {
-      totalUsers: users.length,
+      totalUsers: await User.countDocuments(),
+      activeUsers: await User.countDocuments({ isActive: true }),
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
       timestamp: new Date().toISOString()
@@ -289,6 +338,7 @@ router.get('/stats', (req, res) => {
       data: stats
     });
   } catch (error) {
+    console.error('Error fetching stats:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch stats',

@@ -3,7 +3,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const register = require('prom-client').register;
+const connectDB = require('./config/database');
 const app = require('./app');
+
+// Load environment variables
+require('dotenv').config();
 
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -115,6 +119,9 @@ process.on('SIGINT', () => {
 
 // Start server
 if (require.main === module) {
+  // Connect to MongoDB
+  connectDB();
+  
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT} in ${NODE_ENV} mode`);
     console.log(`Health check: http://localhost:${PORT}/health`);
