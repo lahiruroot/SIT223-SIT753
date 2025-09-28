@@ -1,9 +1,9 @@
-```markdown
-# Node.js Jenkins CI/CD Pipeline
+
+## Node.js Jenkins CI/CD Pipeline
 
 A comprehensive Node.js application with MongoDB integration, complete Jenkins CI/CD pipeline, and monitoring stack for SIT223-SIT753 assignment.
 
-## 🚀 **Project Overview**
+#### 🚀 **Project Overview**
 
 This project demonstrates a production-ready Node.js application with:
 - **RESTful API** with MongoDB persistence
@@ -14,7 +14,7 @@ This project demonstrates a production-ready Node.js application with:
 - **Security Scanning** and vulnerability assessment
 - **Comprehensive Testing** with Jest and Supertest
 
-## 📋 **Table of Contents**
+#### 📋 **Table of Contents**
 
 - [Features](#features)
 - [Tech Stack](#tech-stack)
@@ -30,7 +30,7 @@ This project demonstrates a production-ready Node.js application with:
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
-## ✨ **Features**
+#### ✨ **Features**
 
 - **User Management API** with full CRUD operations
 - **MongoDB Integration** with Mongoose ODM
@@ -44,29 +44,29 @@ This project demonstrates a production-ready Node.js application with:
 - **Code Quality Gates** with SonarQube
 - **Comprehensive Testing** with 90%+ coverage
 
-## 🛠️ **Tech Stack**
+#### 🛠️ **Tech Stack**
 
-### **Backend**
+##### **Backend**
 - **Node.js** 18.x
 - **Express.js** 4.18.2
 - **MongoDB** 7.x with Mongoose
 - **JWT** for authentication (ready)
 - **bcryptjs** for password hashing
 
-### **DevOps & CI/CD**
+##### **DevOps & CI/CD**
 - **Docker** & Docker Compose
 - **Jenkins** with declarative pipeline
 - **Prometheus** for metrics collection
 - **Grafana** for visualization
 - **SonarQube** for code quality
 
-### **Testing & Quality**
+##### **Testing & Quality**
 - **Jest** for unit testing
 - **Supertest** for API testing
 - **ESLint** for code linting
 - **MongoDB Memory Server** for testing
 
-## 🔧 **Prerequisites**
+### 🔧 **Prerequisites**
 
 - **Node.js** 18.x or higher
 - **npm** 8.x or higher
@@ -74,7 +74,7 @@ This project demonstrates a production-ready Node.js application with:
 - **Docker Compose** 2.x or higher
 - **Git** latest version
 
-### **Optional (for full pipeline)**
+#### **Optional (for full pipeline)**
 - **Jenkins** 2.400 or higher
 - **SonarQube** 9.x or higher
 - **Java** 11 or higher
