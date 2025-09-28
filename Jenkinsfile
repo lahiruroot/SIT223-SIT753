@@ -114,11 +114,22 @@ pipeline {
                         curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
                         apt-get install -y nodejs
                         
-                        # Install Docker
+                        # Install Docker (non-interactive)
                         echo "🐳 Installing Docker..."
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        
+                        # Set non-interactive mode for GPG
+                        export DEBIAN_FRONTEND=noninteractive
+                        
+                        # Add Docker GPG key (non-interactive)
+                        curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                        
+                        # Add Docker repository
                         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        
+                        # Update package lists
                         apt-get update
+                        
+                        # Install Docker packages
                         apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
                         
                         # Start Docker service
@@ -172,7 +183,7 @@ pipeline {
         stage('Code Quality - Linting') {
             steps {
                 script {
-                    echo "Running ESLint for code quality checks"
+                    echo "🔍 Running ESLint for code quality checks"
                     sh '''
                         if [ -f package.json ] && [ -d src ]; then
                             echo "Running ESLint..."
@@ -188,7 +199,7 @@ pipeline {
         stage('Security Analysis - Dependencies') {
             steps {
                 script {
-                    echo "Running comprehensive security analysis on dependencies"
+                    echo "🛡️ Running comprehensive security analysis on dependencies"
                     
                     // NPM Audit
                     sh '''
@@ -355,7 +366,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo "Running SonarQube analysis (optional - requires SonarQube plugin)"
+                    echo "🔍 Running SonarQube analysis (optional - requires SonarQube plugin)"
                     sh '''
                         # Check if sonar-scanner is available
                         if command -v sonar-scanner &> /dev/null; then
@@ -378,7 +389,7 @@ pipeline {
         stage('Build Application') {
             steps {
                 script {
-                    echo "Building application"
+                    echo "🏗️ Building application"
                     sh '''
                         # Run build script
                         npm run build
@@ -393,7 +404,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    echo "Building Docker image: ${DOCKER_IMAGE}"
+                    echo "🐳 Building Docker image: ${DOCKER_IMAGE}"
                     sh '''
                         if [ -f Dockerfile ]; then
                             echo "Building Docker image..."
@@ -418,12 +429,13 @@ pipeline {
         stage('Docker Security Scan') {
             steps {
                 script {
-                    echo "Running comprehensive Docker security scan"
+                    echo "🔒 Running comprehensive Docker security scan"
                     sh '''
                         if command -v docker &> /dev/null; then
                             echo "Installing Trivy for Docker security scanning..."
                             
-                            # Install Trivy
+                            # Install Trivy (non-interactive)
+                            export DEBIAN_FRONTEND=noninteractive
                             wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add -
                             echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee -a /etc/apt/sources.list.d/trivy.list
                             apt-get update
@@ -561,7 +573,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo "Deploying to staging environment"
+                    echo "🚀 Deploying to staging environment"
                     sh '''
                         if [ -f docker-compose.yml ] && command -v docker &> /dev/null; then
                             echo "Deploying to staging..."
@@ -672,7 +684,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo "Pushing Docker image to registry"
+                    echo "📤 Pushing Docker image to registry"
                     sh '''
                         # Login to registry (configure credentials in Jenkins)
                         # docker login ${DOCKER_REGISTRY} -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
