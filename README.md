@@ -103,6 +103,9 @@ cp env.example .env
 
 ### **4. Start with Docker (Recommended)**
 ```bash
+# Build your app
+docker-compose build app
+
 # Start all services
 docker-compose up -d
 
@@ -145,18 +148,69 @@ curl http://localhost:3000/api/users
 | `GET` | `/health` | Application health status |
 | `GET` | `/metrics` | Prometheus metrics for monitoring |
 
-### **User Management API**
+### **Authentication Endpoints**
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/users` | Get all users with pagination and search |
-| `GET` | `/api/users/:id` | Get user by ID |
-| `POST` | `/api/users` | Create new user |
-| `PUT` | `/api/users/:id` | Update user |
-| `DELETE` | `/api/users/:id` | Delete user |
-| `GET` | `/api/stats` | Get application statistics |
+| Method | Endpoint | Description | Authentication Required |
+|--------|----------|-------------|------------------------|
+| `POST` | `/api/auth/register` | Register new user | ❌ No |
+| `POST` | `/api/auth/login` | Login user | ❌ No |
+| `GET` | `/api/auth/me` | Get current user profile | ✅ JWT Token |
+| `PUT` | `/api/auth/me` | Update current user profile | ✅ JWT Token |
+| `POST` | `/api/auth/change-password` | Change password | ✅ JWT Token |
+| `POST` | `/api/auth/logout` | Logout user | ✅ JWT Token |
+
+### **User Management API (Admin Only)**
+
+| Method | Endpoint | Description | Authentication Required |
+|--------|----------|-------------|------------------------|
+| `GET` | `/api/users` | Get all users with pagination and search | ✅ JWT + Admin Role |
+| `GET` | `/api/users/:id` | Get user by ID | ✅ JWT + Admin Role |
+| `POST` | `/api/users` | Create new user | ✅ JWT + Admin Role |
+| `PUT` | `/api/users/:id` | Update user | ✅ JWT + Admin Role |
+| `DELETE` | `/api/users/:id` | Delete user | ✅ JWT + Admin Role |
+
+### **Public API**
+
+| Method | Endpoint | Description | Authentication Required |
+|--------|----------|-------------|------------------------|
+| `GET` | `/api/stats` | Get application statistics | ❌ No |
+
+### **Authentication Headers**
+
+For protected endpoints, include the JWT token in the Authorization header:
+
+```
+Authorization: Bearer YOUR_JWT_TOKEN
+```
 
 ### **API Examples**
+
+#### **Register a new user:**
+```bash
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John Doe", "email": "john@example.com", "password": "password123"}'
+```
+
+#### **Login:**
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "john@example.com", "password": "password123"}'
+```
+
+#### **Access protected endpoint:**
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:3000/api/auth/me
+```
+
+#### **Admin-only endpoint:**
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:3000/api/users
+```
+
 
 #### **Get All Users**
 ```bash
