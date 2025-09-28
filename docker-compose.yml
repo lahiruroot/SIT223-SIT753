@@ -78,6 +78,34 @@ services:
       - "traefik.http.routers.prometheus.rule=Host(`localhost`) && PathPrefix(`/prometheus`)"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
 
+  # Jenkins CI/CD server with security tools
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    environment:
+      - JENKINS_OPTS=--httpPort=8080
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace
+      - ./jenkins/plugins.txt:/usr/share/jenkins/ref/plugins.txt
+      - ./jenkins/security.groovy:/usr/share/jenkins/ref/init.groovy.d/security.groovy
+    networks:
+      - app-network
+    user: root
+    depends_on:
+      - app
+      - mongodb
+      - sonarqube
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`localhost`) && PathPrefix(`/jenkins`)"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
 
   # Nginx reverse proxy (optional)
   nginx:
@@ -159,6 +187,8 @@ volumes:
   sonarqube_logs:
     driver: local
   sonarqube_extensions:
+    driver: local
+  jenkins_home:
     driver: local
 
 networks:
