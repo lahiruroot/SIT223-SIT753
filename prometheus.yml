@@ -1,15 +1,8 @@
 # Prometheus configuration for Node.js Jenkins CI/CD Pipeline
 global:
-  # How often to scrape targets by default
   scrape_interval: 15s
-  
-  # How long until a scrape request times out
   scrape_timeout: 10s
-  
-  # How often to evaluate rules
   evaluation_interval: 15s
-  
-  # The labels to add to any time series or alerts when communicating with external systems
   external_labels:
     cluster: 'nodejs-jenkins-cicd'
     environment: 'staging'
@@ -26,19 +19,13 @@ alerting:
         - targets:
           - alertmanager:9093
 
-# Load rules once and periodically evaluate them according to the global 'evaluation_interval'
-rule_files:
-  - "alert_rules.yml"
-  - "recording_rules.yml"
-
-# A scrape configuration containing exactly one endpoint to scrape
+# Scrape configurations
 scrape_configs:
   # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
     scrape_interval: 5s
-    metrics_path: /metrics
 
   # Node.js application
   - job_name: 'nodejs-app'
@@ -46,222 +33,35 @@ scrape_configs:
       - targets: ['app:3000']
     scrape_interval: 10s
     metrics_path: /metrics
-    scrape_timeout: 5s
-    honor_labels: true
-    params:
-      format: ['prometheus']
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: app:3000
 
-  # Node.js application health check
-  - job_name: 'nodejs-app-health'
+  # MongoDB
+  - job_name: 'mongodb'
     static_configs:
-      - targets: ['app:3000']
+      - targets: ['mongodb:27017']
     scrape_interval: 30s
-    metrics_path: /health
-    scrape_timeout: 5s
-    honor_labels: true
 
-  # Docker containers
-  - job_name: 'docker-containers'
-    static_configs:
-      - targets: ['docker:9323']
-    scrape_interval: 15s
-    metrics_path: /metrics
-
-  # Node exporter (if available)
-  - job_name: 'node-exporter'
-    static_configs:
-      - targets: ['node-exporter:9100']
-    scrape_interval: 15s
-    metrics_path: /metrics
-
-  # cAdvisor (if available)
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets: ['cadvisor:8080']
-    scrape_interval: 15s
-    metrics_path: /metrics
-
-  # Redis (if available)
+  # Redis
   - job_name: 'redis'
     static_configs:
       - targets: ['redis:6379']
     scrape_interval: 15s
-    metrics_path: /metrics
 
-  # PostgreSQL (if available)
+  # PostgreSQL
   - job_name: 'postgres'
     static_configs:
       - targets: ['postgres:5432']
     scrape_interval: 15s
-    metrics_path: /metrics
 
-  # Nginx (if available)
-  - job_name: 'nginx'
-    static_configs:
-      - targets: ['nginx:80']
-    scrape_interval: 15s
-    metrics_path: /metrics
-
-  # Jenkins (if available)
-  - job_name: 'jenkins'
-    static_configs:
-      - targets: ['jenkins:8080']
-    scrape_interval: 30s
-    metrics_path: /prometheus
-    scrape_timeout: 10s
-
-  # SonarQube (if available)
-  - job_name: 'sonarqube'
-    static_configs:
-      - targets: ['sonarqube:9000']
-    scrape_interval: 60s
-    metrics_path: /api/monitoring/metrics
-
-  # Grafana (if available)
+  # Grafana
   - job_name: 'grafana'
     static_configs:
       - targets: ['grafana:3000']
     scrape_interval: 30s
     metrics_path: /metrics
 
-# Storage configuration
-storage:
-  tsdb:
-    # Path to the TSDB data directory
-    path: /prometheus
-    
-    # How long to retain samples in the storage
-    retention.time: 15d
-    
-    # How many bytes of free disk space to leave for the WAL
-    retention.size: 1GB
-    
-    # How long to retain WAL files
-    wal-compression: true
-
-# Remote write configuration (optional)
-remote_write:
-  - url: "http://remote-storage-adapter:9201/write"
-    queue_config:
-      max_samples_per_send: 1000
-      batch_send_deadline: 5s
-      max_retries: 10
-      min_backoff: 30ms
-      max_backoff: 100ms
-
-# Remote read configuration (optional)
-remote_read:
-  - url: "http://remote-storage-adapter:9201/read"
-    read_recent: true
-
-# Service discovery configuration
-# This is useful for dynamic service discovery
-# consul_sd_configs:
-#   - server: 'consul:8500'
-#     services: ['nodejs-app', 'redis', 'postgres']
-
-# dns_sd_configs:
-#   - names: ['nodejs-app.local']
-#     type: 'A'
-#     port: 3000
-
-# kubernetes_sd_configs:
-#   - role: 'endpoints'
-#     namespaces:
-#       names: ['default']
-
-# File-based service discovery
-file_sd_configs:
-  - files:
-      - '/etc/prometheus/targets/*.yml'
-    refresh_interval: 5m
-
-# Relabeling configuration
-relabel_configs:
-  # Add environment label
-  - source_labels: [__meta_consul_tags]
-    regex: '.*,environment=([^,]+),.*'
-    target_label: environment
-    replacement: '${1}'
-  
-  # Add service label
-  - source_labels: [__meta_consul_service]
-    target_label: service
-  
-  # Add instance label
-  - source_labels: [__meta_consul_service_address, __meta_consul_service_port]
-    target_label: instance
-    separator: ':'
-    replacement: '${1}:${2}'
-
-# Metric relabeling configuration
-metric_relabel_configs:
-  # Drop metrics with high cardinality
-  - source_labels: [__name__]
-    regex: 'go_gc_duration_seconds.*'
-    action: drop
-  
-  # Keep only specific metrics
-  - source_labels: [__name__]
-    regex: 'http_requests_total|http_request_duration_seconds|active_connections|nodejs_.*'
-    action: keep
-
-# Recording rules for pre-computed metrics
-recording_rules:
-  - name: "nodejs_app_rules"
-    rules:
-      - record: nodejs_app:http_requests_per_second
-        expr: rate(http_requests_total[5m])
-      
-      - record: nodejs_app:http_request_duration_p95
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-      
-      - record: nodejs_app:active_connections_avg
-        expr: avg_over_time(active_connections[5m])
-
-# Alert rules
-alert_rules:
-  - name: "nodejs_app_alerts"
-    rules:
-      - alert: NodeJSAppDown
-        expr: up{job="nodejs-app"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Node.js application is down"
-          description: "The Node.js application has been down for more than 1 minute"
-      
-      - alert: HighErrorRate
-        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.1
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate detected"
-          description: "Error rate is above 10% for more than 2 minutes"
-      
-      - alert: HighResponseTime
-        expr: nodejs_app:http_request_duration_p95 > 1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High response time detected"
-          description: "95th percentile response time is above 1 second for more than 5 minutes"
-      
-      - alert: HighMemoryUsage
-        expr: process_resident_memory_bytes / 1024 / 1024 > 500
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High memory usage detected"
-          description: "Memory usage is above 500MB for more than 5 minutes"
+  # SonarQube
+  - job_name: 'sonarqube'
+    static_configs:
+      - targets: ['sonarqube:9000']
+    scrape_interval: 60s
+    metrics_path: /api/monitoring/metrics
