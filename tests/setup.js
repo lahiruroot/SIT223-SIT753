@@ -10,7 +10,7 @@ beforeAll(async () => {
     console.log('🔄 Attempting to use MongoDB Memory Server...');
     mongoServer = await MongoMemoryServer.create({
       binary: {
-        version: '6.0.6', // Use a version that exists for ARM64
+        version: '7.0.3', // Use a version compatible with Debian 12
         downloadDir: '/tmp/mongodb-memory-server'
       },
       instance: {
