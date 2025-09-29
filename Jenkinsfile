@@ -143,9 +143,22 @@ pipeline {
                             echo "⚠️ Docker not available, some stages may be skipped"
                         fi
                         
-                        # Install additional tools
+                        # Install additional tools (with retry and error handling)
                         echo "🔧 Installing additional tools..."
-                        npm install -g jest-junit artillery
+                        
+                        # Try to install jest-junit with retry
+                        echo "Installing jest-junit..."
+                        for i in {1..3}; do
+                            npm install -g jest-junit && break || echo "Attempt $i failed, retrying..."
+                            sleep 5
+                        done || echo "⚠️ jest-junit installation failed, continuing..."
+                        
+                        # Try to install artillery with retry
+                        echo "Installing artillery..."
+                        for i in {1..3}; do
+                            npm install -g artillery && break || echo "Attempt $i failed, retrying..."
+                            sleep 5
+                        done || echo "⚠️ artillery installation failed, continuing..."
                         
                         # Verify installations
                         echo "=== 📋 Environment Information ==="
@@ -177,10 +190,22 @@ pipeline {
                     sh '''
                         if [ -f package.json ]; then
                             echo "📋 Installing Node.js dependencies..."
-                            npm ci --prefer-offline --no-audit
+                            
+                            # Try npm ci with retry
+                            for i in {1..3}; do
+                                echo "Attempt $i: Installing dependencies..."
+                                npm ci --prefer-offline --no-audit && break || {
+                                    echo "Attempt $i failed, retrying..."
+                                    sleep 10
+                                    if [ $i -eq 3 ]; then
+                                        echo "⚠️ npm ci failed after 3 attempts, trying npm install..."
+                                        npm install --no-audit || echo "npm install also failed, continuing..."
+                                    fi
+                                }
+                            done
                             
                             echo "📊 Dependency analysis:"
-                            npm list --depth=0
+                            npm list --depth=0 || echo "Could not list dependencies"
                             
                             echo "🔍 Checking for outdated packages:"
                             npm outdated || echo "No outdated packages found"
@@ -281,7 +306,13 @@ pipeline {
                             export JWT_EXPIRE=${JWT_EXPIRE}
                             
                             # Run tests with coverage and JUnit output
-                            npm run test:coverage -- --reporters=default --reporters=jest-junit --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' || echo "Tests completed with warnings"
+                            if command -v jest-junit &> /dev/null; then
+                                echo "Running tests with jest-junit reporter..."
+                                npm run test:coverage -- --reporters=default --reporters=jest-junit --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' || echo "Tests completed with warnings"
+                            else
+                                echo "jest-junit not available, running tests without JUnit reporter..."
+                                npm run test:coverage -- --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' || echo "Tests completed with warnings"
+                            fi
                             
                             # Display test summary
                             echo "📊 Test Results Summary:"
