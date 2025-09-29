@@ -171,7 +171,7 @@ router.post('/auth/register', validateUser, handleValidationErrors, async (req, 
     });
   } catch (error) {
     console.error('Error registering user:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to register user',
       message: error.message
@@ -241,7 +241,7 @@ router.post('/auth/login', [
     });
   } catch (error) {
     console.error('Error during login:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Login failed',
       message: error.message
@@ -261,7 +261,7 @@ router.post('/auth/logout', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error during logout:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Logout failed',
       message: error.message
@@ -278,7 +278,7 @@ router.get('/auth/me', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting user profile:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to get user profile',
       message: error.message
@@ -329,7 +329,7 @@ router.put('/auth/me', auth, [
     });
   } catch (error) {
     console.error('Error updating profile:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update profile',
       message: error.message
@@ -372,7 +372,7 @@ router.post('/auth/change-password', auth, [
     });
   } catch (error) {
     console.error('Error changing password:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to change password',
       message: error.message
@@ -428,7 +428,7 @@ router.get('/users', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to fetch users',
       message: error.message
@@ -454,7 +454,7 @@ router.get('/users/:id', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to fetch user',
       message: error.message
@@ -484,7 +484,7 @@ router.post('/users', adminAuth, validateUser, handleValidationErrors, async (re
     });
   } catch (error) {
     console.error('Error creating user:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to create user',
       message: error.message
@@ -534,7 +534,7 @@ router.put('/users/:id', adminAuth, validateUserUpdate, handleValidationErrors, 
     });
   } catch (error) {
     console.error('Error updating user:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to update user',
       message: error.message
@@ -561,7 +561,7 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting user:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to delete user',
       message: error.message
@@ -586,7 +586,7 @@ router.get('/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Failed to fetch stats',
       message: error.message

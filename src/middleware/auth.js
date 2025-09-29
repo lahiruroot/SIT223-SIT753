@@ -25,7 +25,7 @@ const auth = async (req, res, next) => {
     req.user = user;
     return next();
   } catch (error) {
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       error: 'Invalid token.'
     });
@@ -44,7 +44,7 @@ const adminAuth = async (req, res, next) => {
       return next();
     });
   } catch (error) {
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       error: 'Authentication failed.'
     });

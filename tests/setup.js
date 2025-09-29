@@ -4,10 +4,10 @@ const mongoose = require('mongoose');
 let mongoServer;
 
 beforeAll(async () => {
-  // Configure MongoDB Memory Server for Debian 12 compatibility
+  // Configure MongoDB Memory Server for ARM64 compatibility
   mongoServer = await MongoMemoryServer.create({
     binary: {
-      version: '7.0.3', // Use compatible version for Debian 12
+      version: '7.0.15', // Use latest 7.0.x version for ARM64
       downloadDir: '/tmp/mongodb-memory-server'
     },
     instance: {
