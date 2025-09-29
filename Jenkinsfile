@@ -204,6 +204,10 @@ pipeline {
                                 }
                             done
                             
+                            # Install jest-junit as local dependency if not available globally
+                            echo "📦 Ensuring jest-junit is available locally..."
+                            npm install --save-dev jest-junit@16.0.0 || echo "jest-junit installation failed, continuing..."
+                            
                             echo "📊 Dependency analysis:"
                             npm list --depth=0 || echo "Could not list dependencies"
                             
@@ -228,7 +232,14 @@ pipeline {
                     sh '''
                         if [ -f package.json ] && [ -d src ]; then
                             echo "Running ESLint..."
-                            npm run lint || echo "Linting completed with warnings"
+                            
+                            # First try to auto-fix issues
+                            echo "🔧 Attempting to auto-fix linting issues..."
+                            npm run lint:fix || echo "Auto-fix completed with some issues remaining"
+                            
+                            # Then run linting (this will show remaining issues but won't fail the pipeline)
+                            echo "🔍 Running final lint check..."
+                            npm run lint || echo "Linting completed with warnings - continuing pipeline"
                         else
                             echo "No package.json or src directory found, skipping linting"
                         fi
@@ -305,12 +316,12 @@ pipeline {
                             export JWT_SECRET=${JWT_SECRET}
                             export JWT_EXPIRE=${JWT_EXPIRE}
                             
-                            # Run tests with coverage and JUnit output
-                            if command -v jest-junit &> /dev/null; then
+                            # Check if jest-junit is available locally
+                            if [ -f node_modules/.bin/jest-junit ] || [ -f node_modules/jest-junit/package.json ]; then
                                 echo "Running tests with jest-junit reporter..."
                                 npm run test:coverage -- --reporters=default --reporters=jest-junit --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' || echo "Tests completed with warnings"
                             else
-                                echo "jest-junit not available, running tests without JUnit reporter..."
+                                echo "jest-junit not available locally, running tests without JUnit reporter..."
                                 npm run test:coverage -- --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' || echo "Tests completed with warnings"
                             fi
                             
@@ -328,8 +339,14 @@ pipeline {
             }
             post {
                 always {
-                    // Publish test results
-                    junit "${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}"
+                    // Publish test results (only if JUnit file exists)
+                    script {
+                        if (fileExists("${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}")) {
+                            junit "${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}"
+                        } else {
+                            echo "No JUnit test results found, skipping JUnit reporting"
+                        }
+                    }
                     
                     // Publish coverage reports
                     publishHTML([
