@@ -23,7 +23,7 @@ const auth = async (req, res, next) => {
     }
 
     req.user = user;
-    next();
+    return next();
   } catch (error) {
     res.status(401).json({
       success: false,
@@ -41,7 +41,7 @@ const adminAuth = async (req, res, next) => {
           error: 'Access denied. Admin privileges required.'
         });
       }
-      next();
+      return next();
     });
   } catch (error) {
     res.status(401).json({

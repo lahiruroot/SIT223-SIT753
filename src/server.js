@@ -90,7 +90,7 @@ server.use('*', (req, res) => {
 });
 
 // Error handling middleware
-server.use((error, req, res, next) => {
+server.use((error, req, res, _next) => {
   console.error('Error:', error);
   
   res.status(error.status || 500).json({
