@@ -34,7 +34,7 @@ const auth = async (req, res, next) => {
 
 const adminAuth = async (req, res, next) => {
   try {
-    await auth(req, res, () => {
+    return await auth(req, res, () => {
       if (req.user.role !== 'admin') {
         return res.status(403).json({
           success: false,
