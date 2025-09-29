@@ -7,6 +7,7 @@ beforeAll(async () => {
   // Configure MongoDB Memory Server for ARM64 compatibility
   mongoServer = await MongoMemoryServer.create({
     binary: {
+      version: '7.0.16',
       downloadDir: '/tmp/mongodb-memory-server'
     },
     instance: {
