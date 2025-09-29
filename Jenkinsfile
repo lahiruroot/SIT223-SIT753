@@ -6,7 +6,7 @@ pipeline {
         APP_NAME = 'nodejs-jenkins-cicd-pipeline'
         DOCKER_IMAGE = "${APP_NAME}:${BUILD_NUMBER}"
         DOCKER_REGISTRY = 'localhost:5000'
-        NODE_VERSION = '18'
+        NODE_VERSION = '20'
         NPM_CONFIG_LOGLEVEL = 'warn'
         
         // Database configuration
@@ -65,7 +65,7 @@ pipeline {
                         branches: [[name: '*/main']],
                         userRemoteConfigs: [[
                             url: 'https://github.com/lahiruroot/SIT223-SIT753.git',
-                            credentialsId: 'github-credentials'
+                            credentialsId: 'github-credentials' // Must be configured in Jenkins: Manage Jenkins → Credentials
                         ]],
                         extensions: [
                             [$class: 'CleanBeforeCheckout'],
@@ -132,13 +132,17 @@ pipeline {
                         # Install Docker packages
                         apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
                         
-                        # Try to start Docker service (ignore errors)
+                        # Try to start Docker service (ignore errors - not needed if Docker socket is mounted)
                         echo "🚀 Starting Docker service..."
-                        service docker start || echo "Docker service start failed, continuing..."
+                        service docker start || echo "Docker service start failed (this is normal if Docker socket is mounted), continuing..."
                         
-                        # Check if Docker is available
+                        # Check if Docker is available and working
                         if command -v docker &> /dev/null; then
-                            echo "✅ Docker is available"
+                            if docker info &> /dev/null; then
+                                echo "✅ Docker is available and working"
+                            else
+                                echo "⚠️ Docker command available but not working (check if Docker socket is mounted: -v /var/run/docker.sock:/var/run/docker.sock)"
+                            fi
                         else
                             echo "⚠️ Docker not available, some stages may be skipped"
                         fi
@@ -342,7 +346,7 @@ pipeline {
                     // Publish test results (only if JUnit file exists)
                     script {
                         if (fileExists("${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}")) {
-                            junit "${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}"
+                    junit "${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}"
                         } else {
                             echo "No JUnit test results found, skipping JUnit reporting"
                         }
@@ -435,13 +439,13 @@ pipeline {
                         # Check if sonar-scanner is available
                         if command -v sonar-scanner &> /dev/null; then
                             echo "Running SonarQube analysis..."
-                            npx sonar-scanner \
-                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                                -Dsonar.host.url=${SONAR_HOST_URL} \
-                                -Dsonar.sources=src \
-                                -Dsonar.tests=tests \
-                                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-                                -Dsonar.testExecutionReportPaths=${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}
+                        npx sonar-scanner \
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                            -Dsonar.host.url=${SONAR_HOST_URL} \
+                            -Dsonar.sources=src \
+                            -Dsonar.tests=tests \
+                            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+                            -Dsonar.testExecutionReportPaths=${JEST_JUNIT_OUTPUT_DIR}/${JEST_JUNIT_OUTPUT_NAME}
                         else
                             echo "SonarQube scanner not available, skipping analysis"
                         fi
@@ -472,20 +476,20 @@ pipeline {
                     sh '''
                         # Check if Docker is available
                         if command -v docker &> /dev/null; then
-                            if [ -f Dockerfile ]; then
-                                echo "Building Docker image..."
-                                
-                                # Build Docker image
-                                docker build -t ${DOCKER_IMAGE} .
-                                
-                                # Tag for registry
-                                docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
-                                docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/${APP_NAME}:latest
-                                
-                                # Show image details
-                                docker images | grep ${APP_NAME}
-                            else
-                                echo "No Dockerfile found, skipping Docker build"
+                        if [ -f Dockerfile ]; then
+                            echo "Building Docker image..."
+                            
+                            # Build Docker image
+                            docker build -t ${DOCKER_IMAGE} .
+                            
+                            # Tag for registry
+                            docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/${DOCKER_IMAGE}
+                            docker tag ${DOCKER_IMAGE} ${DOCKER_REGISTRY}/${APP_NAME}:latest
+                            
+                            # Show image details
+                            docker images | grep ${APP_NAME}
+                        else
+                            echo "No Dockerfile found, skipping Docker build"
                             fi
                         else
                             echo "Docker not available, skipping Docker build"
@@ -778,10 +782,10 @@ pipeline {
                 sh '''
                     if command -v docker &> /dev/null; then
                         echo "Cleaning up Docker resources..."
-                        # Remove dangling images
+                    # Remove dangling images
                         docker image prune -f || true
-                        
-                        # Remove unused containers
+                    
+                    # Remove unused containers
                         docker container prune -f || true
                     else
                         echo "Docker not available, skipping cleanup"
@@ -823,11 +827,11 @@ pipeline {
                 sh '''
                     if command -v docker &> /dev/null; then
                         echo "Cleaning up Docker containers..."
-                        # Stop and remove containers
+                    # Stop and remove containers
                         docker compose down --remove-orphans || true
-                        
-                        # Remove unused networks
-                        docker network prune -f || true
+                    
+                    # Remove unused networks
+                    docker network prune -f || true
                     else
                         echo "Docker not available, skipping cleanup"
                     fi

@@ -18,6 +18,7 @@ This project demonstrates a production-ready Node.js application with:
 
 - [Features](#features)
 - [Tech Stack](#tech-stack)
+- [Jenkins Setup](#jenkins-setup)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [API Documentation](#api-documentation)
@@ -65,6 +66,55 @@ This project demonstrates a production-ready Node.js application with:
 - **Supertest** for API testing
 - **ESLint** for code linting
 - **MongoDB Memory Server** for testing
+
+### 🚀 **Jenkins Setup**
+
+#### **1. GitHub Credentials Configuration**
+
+Before running the pipeline, you need to configure GitHub credentials in Jenkins:
+
+1. **Go to Jenkins Dashboard** → **Manage Jenkins** → **Credentials**
+2. **Add new credentials:**
+   - **Kind:** Username with password (or Personal Access Token)
+   - **ID:** `github-credentials` (must match Jenkinsfile)
+   - **Username:** Your GitHub username
+   - **Password/Token:** Your GitHub Personal Access Token (PAT)
+3. **Ensure PAT has these scopes:**
+   - `repo` (full repository access)
+   - `read:user` (read user profile)
+
+#### **2. Docker Socket Mounting (Recommended)**
+
+For optimal Docker integration, run Jenkins with Docker socket mounted:
+
+```bash
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v jenkins_home:/var/jenkins_home \
+  jenkins/jenkins:lts
+```
+
+This allows Jenkins to use the host's Docker daemon without starting a Docker service inside the container.
+
+#### **3. Pipeline Configuration**
+
+1. **Create a new Pipeline job** in Jenkins
+2. **Configure Pipeline script from SCM:**
+   - **SCM:** Git
+   - **Repository URL:** `https://github.com/lahiruroot/SIT223-SIT753.git`
+   - **Branch:** `*/main`
+   - **Script Path:** `Jenkinsfile`
+3. **Save and run** the pipeline
+
+#### **4. Troubleshooting Common Issues**
+
+- **Git Credential Warning:** Ensure `github-credentials` is properly configured
+- **Docker Service Start Failed:** This is normal when using Docker socket mounting
+- **MongoDB Memory Server Download Error:** The pipeline includes fallback to Docker MongoDB
+- **Node.js Version Warnings:** Pipeline uses Node.js 20 for Artillery compatibility
 
 ### 🔧 **Prerequisites**
 
